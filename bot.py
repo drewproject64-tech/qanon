@@ -21,27 +21,37 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 router = Router()
 
+BOT_NAME = "QAnon TextFix Bot"
+
 WELCOME = (
-    "<b>Welcome to TextFix ✍️</b>\n\n"
-    "TextFix is a simple text-cleaning tool. Send me any text and I can help "
-    "you improve spelling, punctuation, spacing, capitalization, and basic formatting.\n\n"
+    f"<b>Welcome to {BOT_NAME} ✍️</b>\n\n"
+    "A simple text-fixing utility that helps make your writing cleaner and easier to read.\n\n"
+    "<b>What I can do:</b>\n"
+    "• Fix common spacing issues\n"
+    "• Clean up punctuation\n"
+    "• Improve sentence capitalization\n"
+    "• Apply basic text formatting\n\n"
     "<b>How to use:</b>\n"
     "1. Tap <b>Fix My Text</b>.\n"
     "2. Send your text.\n"
-    "3. Receive a cleaned-up version you can copy and use."
+    "3. Get a cleaned-up version ready to copy.\n\n"
+    "No complicated setup — just send your text and get started."
 )
 
 ABOUT = (
-    "<b>About TextFix</b>\n\n"
-    "TextFix is a utility bot designed to make everyday writing cleaner and easier to read.\n\n"
-    "It focuses on text formatting and basic corrections. It does not create or verify news, "
-    "political content, financial advice, or other specialized information."
+    f"<b>About {BOT_NAME}</b>\n\n"
+    "QAnon TextFix Bot is a lightweight writing utility for cleaning up everyday text. "
+    "It focuses on spelling-related formatting, punctuation, spacing, capitalization, "
+    "and basic readability improvements.\n\n"
+    "It is designed for simple text editing and does not provide news, political guidance, "
+    "financial advice, or specialized professional advice."
 )
 
 HELP = (
-    "<b>Help</b>\n\n"
-    "Send a text message up to 4,000 characters. TextFix will clean common formatting issues "
-    "such as extra spaces, repeated punctuation, and sentence capitalization."
+    "<b>How to use</b>\n\n"
+    "Send a text message of up to 4,000 characters. The bot will clean common formatting "
+    "issues such as extra spaces, repeated punctuation, and sentence capitalization.\n\n"
+    "Use <b>Fix Another</b> whenever you want to process another message."
 )
 
 
@@ -132,7 +142,7 @@ async def help_callback_handler(callback: CallbackQuery) -> None:
 async def fix_handler(callback: CallbackQuery) -> None:
     await callback.message.edit_text(
         "<b>Send your text ✍️</b>\n\n"
-        "I’ll clean up spacing, punctuation, and sentence capitalization.",
+        "I'll clean up spacing, punctuation, and sentence capitalization.",
         reply_markup=action_keyboard(),
     )
     await callback.answer()
@@ -141,6 +151,7 @@ async def fix_handler(callback: CallbackQuery) -> None:
 @router.message(F.text)
 async def text_handler(message: Message) -> None:
     original = message.text.strip()
+
     if not original:
         await message.answer("Please send some text to fix.", reply_markup=menu_keyboard())
         return
@@ -154,6 +165,7 @@ async def text_handler(message: Message) -> None:
 
     fixed = fix_text(original)
     safe_text = html.escape(fixed)
+
     await message.answer(
         f"<b>✅ Improved text</b>\n\n<blockquote>{safe_text}</blockquote>",
         reply_markup=action_keyboard(),
@@ -163,15 +175,19 @@ async def text_handler(message: Message) -> None:
 @router.message()
 async def unsupported_handler(message: Message) -> None:
     await message.answer(
-        "Please send a text message. TextFix works with written text and basic formatting.",
+        "Please send a text message. QAnon TextFix Bot works with written text and basic formatting.",
         reply_markup=menu_keyboard(),
     )
 
 
 async def main() -> None:
-    bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(
+        token=TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
     dp = Dispatcher()
     dp.include_router(router)
+
     try:
         await dp.start_polling(bot)
     finally:
