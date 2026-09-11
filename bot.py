@@ -1,6 +1,8 @@
 import asyncio
+import html
 import logging
 import os
+import re
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
@@ -16,109 +18,160 @@ if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
 logging.basicConfig(level=logging.INFO)
-
+logger = logging.getLogger(__name__)
 router = Router()
 
 WELCOME = (
-    "<b>Welcome to QAnon Reference</b>\n\n"
-    "This bot provides a neutral, educational reference about the history, "
-    "terminology, major events, and public record surrounding QAnon.\n\n"
-    "Choose a section below to explore the information. Content is presented "
-    "for educational and reference purposes and does not treat unverified claims as facts."
+    "<b>Welcome to TextFix ✍️</b>\n\n"
+    "TextFix is a simple text-cleaning tool. Send me any text and I can help "
+    "you improve spelling, punctuation, spacing, capitalization, and basic formatting.\n\n"
+    "<b>How to use:</b>\n"
+    "1. Tap <b>Fix My Text</b>.\n"
+    "2. Send your text.\n"
+    "3. Receive a cleaned-up version you can copy and use."
 )
 
 ABOUT = (
-    "<b>About QAnon Reference</b>\n\n"
-    "QAnon Reference is an informational bot covering the history and public "
-    "record of the QAnon movement. It is designed for simple browsing and "
-    "educational use."
+    "<b>About TextFix</b>\n\n"
+    "TextFix is a utility bot designed to make everyday writing cleaner and easier to read.\n\n"
+    "It focuses on text formatting and basic corrections. It does not create or verify news, "
+    "political content, financial advice, or other specialized information."
 )
 
-TEXTS = {
-    "overview": (
-        "<b>Overview</b>\n\n"
-        "QAnon is a conspiracy theory movement that emerged online in the United States. "
-        "This section provides neutral background and context rather than endorsing its claims."
-    ),
-    "history": (
-        "<b>History</b>\n\n"
-        "Explore a brief timeline of notable developments, online communities, and public events "
-        "associated with QAnon."
-    ),
-    "terms": (
-        "<b>Terminology</b>\n\n"
-        "Learn common terms associated with QAnon and what those terms mean in their historical and online context."
-    ),
-    "facts": (
-        "<b>Fact Checks</b>\n\n"
-        "This section is intended for reviewing claims critically and distinguishing documented information "
-        "from allegations or unsupported statements."
-    ),
-}
+HELP = (
+    "<b>Help</b>\n\n"
+    "Send a text message up to 4,000 characters. TextFix will clean common formatting issues "
+    "such as extra spaces, repeated punctuation, and sentence capitalization."
+)
 
 
-def main_keyboard() -> InlineKeyboardMarkup:
+def menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="✍️ Fix My Text", callback_data="fix")],
             [
-                InlineKeyboardButton(text="📚 Overview", callback_data="overview"),
-                InlineKeyboardButton(text="🕰️ History", callback_data="history"),
+                InlineKeyboardButton(text="ℹ️ About", callback_data="about"),
+                InlineKeyboardButton(text="❓ Help", callback_data="help"),
             ],
-            [
-                InlineKeyboardButton(text="📖 Terminology", callback_data="terms"),
-                InlineKeyboardButton(text="🔎 Fact Checks", callback_data="facts"),
-            ],
-            [InlineKeyboardButton(text="ℹ️ About", callback_data="about")],
         ]
     )
 
 
-def back_keyboard() -> InlineKeyboardMarkup:
+def action_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="🔙 Back to Menu", callback_data="menu")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✍️ Fix Another", callback_data="fix")],
+            [InlineKeyboardButton(text="🏠 Main Menu", callback_data="menu")],
+        ]
     )
+
+
+def clean_spacing(text: str) -> str:
+    text = text.strip()
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text
+
+
+def clean_punctuation(text: str) -> str:
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+    text = re.sub(r"([,.;:!?])(?=\S)", r"\1 ", text)
+    text = re.sub(r"([!?.,])\1+", r"\1", text)
+    return text
+
+
+def capitalize_sentences(text: str) -> str:
+    chars = list(text)
+    should_capitalize = True
+    for index, char in enumerate(chars):
+        if char.isalpha() and should_capitalize:
+            chars[index] = char.upper()
+            should_capitalize = False
+        elif char in ".!?":
+            should_capitalize = True
+    return "".join(chars)
+
+
+def fix_text(text: str) -> str:
+    result = clean_spacing(text)
+    result = clean_punctuation(result)
+    return capitalize_sentences(result).strip()
 
 
 @router.message(CommandStart())
 async def start_handler(message: Message) -> None:
-    await message.answer(WELCOME, reply_markup=main_keyboard())
+    await message.answer(WELCOME, reply_markup=menu_keyboard())
 
 
 @router.message(Command("help"))
 async def help_handler(message: Message) -> None:
-    await message.answer(
-        "<b>How to use this bot</b>\n\n"
-        "Tap any button below to browse the available sections. You can return to the main menu at any time.",
-        reply_markup=main_keyboard(),
-    )
+    await message.answer(HELP, reply_markup=menu_keyboard())
 
 
 @router.callback_query(F.data == "menu")
 async def menu_handler(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(WELCOME, reply_markup=main_keyboard())
+    await callback.message.edit_text(WELCOME, reply_markup=menu_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data == "about")
 async def about_handler(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(ABOUT, reply_markup=back_keyboard())
+    await callback.message.edit_text(ABOUT, reply_markup=action_keyboard())
     await callback.answer()
 
 
-@router.callback_query(F.data.in_({"overview", "history", "terms", "facts"}))
-async def section_handler(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(TEXTS[callback.data], reply_markup=back_keyboard())
+@router.callback_query(F.data == "help")
+async def help_callback_handler(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(HELP, reply_markup=action_keyboard())
     await callback.answer()
+
+
+@router.callback_query(F.data == "fix")
+async def fix_handler(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(
+        "<b>Send your text ✍️</b>\n\n"
+        "I’ll clean up spacing, punctuation, and sentence capitalization.",
+        reply_markup=action_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(F.text)
+async def text_handler(message: Message) -> None:
+    original = message.text.strip()
+    if not original:
+        await message.answer("Please send some text to fix.", reply_markup=menu_keyboard())
+        return
+
+    if len(original) > 4000:
+        await message.answer(
+            "Your message is too long. Please send up to 4,000 characters at a time.",
+            reply_markup=menu_keyboard(),
+        )
+        return
+
+    fixed = fix_text(original)
+    safe_text = html.escape(fixed)
+    await message.answer(
+        f"<b>✅ Improved text</b>\n\n<blockquote>{safe_text}</blockquote>",
+        reply_markup=action_keyboard(),
+    )
+
+
+@router.message()
+async def unsupported_handler(message: Message) -> None:
+    await message.answer(
+        "Please send a text message. TextFix works with written text and basic formatting.",
+        reply_markup=menu_keyboard(),
+    )
 
 
 async def main() -> None:
-    bot = Bot(
-        token=TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-    )
+    bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
-
     try:
         await dp.start_polling(bot)
     finally:
